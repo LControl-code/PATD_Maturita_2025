@@ -36,6 +36,7 @@ export async function fetchFailedTestsData(): Promise<any> {
  * with the fetched initial data.
  */
 export default async function FailedTestsGraph() {
+    if (process.env.NEXT_PHASE === "phase-production-build") return [];
     const data = await fetchFailedTestsData();
     return <FailedTestsGraphClient initialData={data} />;
 }

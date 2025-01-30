@@ -14,14 +14,14 @@ import PocketBase from "pocketbase";
 // -------------------------------------------------------
 // Initialize PocketBase client
 // -------------------------------------------------------
-export const pb = new PocketBase("http://127.0.0.1:8090") as TypedPocketBase;
+export const pb = new PocketBase(`${process.env.POCKETBASE_URL}`) as TypedPocketBase;
 pb.autoCancellation(false);
 
 // -------------------------------------------------------
 // Helper function to fetch the station collection names
 // -------------------------------------------------------
 async function fetchStationCollections(): Promise<string[]> {
-  const url = "http://127.0.0.1:8090/api/stationCollections";
+  const url = `${process.env.POCKETBASE_URL}/api/stationCollections`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch station collections: ${res.statusText}`);
@@ -63,8 +63,8 @@ interface RecordsByStation {
 export async function getStationData() {
   // Still directly using PocketBase SDK calls
   const records = await pb
-      .collection("station_s02")
-      .getList<StationS02Record>(1, 20, { sort: "-created" });
+    .collection("station_s02")
+    .getList<StationS02Record>(1, 20, { sort: "-created" });
   return records.items;
 }
 
@@ -107,7 +107,7 @@ export async function getLimitsForMotorType(motorType?: "EFAD" | "ERAD" | "Short
 // [Now calls your new /api/topFails route]
 // -------------------------------------------------------
 export async function getTopFailsData() {
-  const url = "http://127.0.0.1:8090/api/topFails";
+  const url = `${process.env.POCKETBASE_URL}/api/topFails`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch top fails data: ${res.statusText}`);
@@ -120,7 +120,7 @@ export async function getTopFailsData() {
 // [Already pointing to your /api/stats route, kept as-is]
 // -------------------------------------------------------
 export async function getStatsRecord() {
-  const url = "http://127.0.0.1:8090/api/stats";
+  const url = `${process.env.POCKETBASE_URL}/api/stats`;
   const res = await fetch(url, { method: "GET" });
   if (!res.ok) {
     throw new Error(`Failed to fetch stats record: ${res.statusText}`);
@@ -133,7 +133,7 @@ export async function getStatsRecord() {
 // [Now calls your new /api/failedTestsGraph route]
 // -------------------------------------------------------
 export async function getFailedTestsGraphData() {
-  const url = "http://127.0.0.1:8090/api/failedTestsGraph";
+  const url = `${process.env.POCKETBASE_URL}/api/failedTestsGraph`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch failed tests graph: ${res.statusText}`);
@@ -147,7 +147,7 @@ export async function getFailedTestsGraphData() {
 // -------------------------------------------------------
 export async function getDeviceData(deviceCode: string) {
   const encoded = encodeURIComponent(deviceCode);
-  const url = `http://127.0.0.1:8090/api/deviceData?deviceCode=${encoded}`;
+  const url = `${process.env.POCKETBASE_URL}/api/deviceData?deviceCode=${encoded}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch device data: ${res.statusText}`);
@@ -160,7 +160,7 @@ export async function getDeviceData(deviceCode: string) {
 // [Now calls your new /api/liveErrors route]
 // -------------------------------------------------------
 export async function getLiveErrorsData() {
-  const url = "http://127.0.0.1:8090/api/liveErrors";
+  const url = `${process.env.POCKETBASE_URL}/api/liveErrors`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch live errors data: ${res.statusText}`);

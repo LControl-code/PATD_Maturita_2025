@@ -37,7 +37,7 @@ export async function fetchTodaysMostFailsData(): Promise<FailsData> {
  * @async
  */
 export default async function TodaysMostFails() {
-
+    if (process.env.NEXT_PHASE === "phase-production-build") return [];
     const initialData = await fetchTodaysMostFailsData()
     return <TodaysMostFailsClient initialData={initialData} />
 }

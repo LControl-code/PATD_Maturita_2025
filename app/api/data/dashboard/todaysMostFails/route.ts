@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
     try {
         // Fetch from the external PocketBase URL
-        const res = await fetch('http://127.0.0.1:8090/api/topFailsNew', { cache: 'no-store' });
+        const res = await fetch(`${process.env.POCKETBASE_URL}/api/topFailsNew`, { cache: 'no-store' });
 
         if (!res.ok) {
             throw new Error(`Failed to fetch external data (status: ${res.status}).`);

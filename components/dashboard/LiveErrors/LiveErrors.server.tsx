@@ -28,6 +28,7 @@ export async function fetchLiveErrorsData(): Promise<ErrorData[]> {
  * @async
  */
 export default async function LiveErrors() {
+  if (process.env.NEXT_PHASE === "phase-production-build") return [];
   const initialData = await fetchLiveErrorsData()
   return <LiveErrorsClient initialData={initialData} />
 }

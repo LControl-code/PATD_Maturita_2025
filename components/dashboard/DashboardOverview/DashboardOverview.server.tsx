@@ -16,6 +16,8 @@ export async function fetchDashboardOverviewData() {
  * <DashboardOverview />
  */
 export default async function DashboardOverview() {
+  if (process.env.NEXT_PHASE === "phase-production-build") return [];
+
   const initialData = await fetchDashboardOverviewData();
   return <DashboardOverviewClient initialData={initialData} />;
 }
