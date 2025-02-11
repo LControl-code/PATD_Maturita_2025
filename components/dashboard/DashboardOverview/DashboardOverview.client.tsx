@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,21 +26,23 @@ interface DashboardOverviewProps {
 
 /**
  * Client-side component that displays an overview dashboard with key statistics.
- * 
+ *
  * @component
  * @param {Object} props - Component props
  * @param {StatsData} props.initialData - Initial statistics data to display
- * 
+ *
  * @returns {JSX.Element} A card containing statistics including:
  * - Total number of tested devices
  * - Number of active stations
  * - Today's production percentage
  * - Overall efficiency with progress bar
  *
- * The component includes animations on mount and displays loading state 
+ * The component includes animations on mount and displays loading state
  * if stats are not available (rare case due to SSR).
  */
-export default function DashboardOverviewClient({ initialData }: DashboardOverviewProps) {
+export default function DashboardOverviewClient({
+  initialData,
+}: DashboardOverviewProps) {
   const [stats, setStats] = useState<StatsData>(initialData);
 
   // If stats are not loaded (rare, since we had initialData), we can show a fallback
@@ -92,18 +94,19 @@ export default function DashboardOverviewClient({ initialData }: DashboardOvervi
 
               <TooltipProvider>
                 <Tooltip>
-                  {/*
-         `asChild` lets the Trigger adopt the child's display styling
-         rather than forcing inline.
-       */}
                   <TooltipTrigger asChild>
                     <div className="w-full">
-                      <Progress value={stats.overallEfficiency ?? 0} className="mt-2" />
+                      <Progress
+                        value={stats.overallEfficiency ?? 0}
+                        className="mt-2"
+                      />
                     </div>
                   </TooltipTrigger>
 
                   <TooltipContent>
-                    <p>{stats.overallEfficiency?.toFixed(1) ?? 0}% Efficiency</p>
+                    <p>
+                      {stats.overallEfficiency?.toFixed(1) ?? 0}% Efficiency
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

@@ -1,5 +1,5 @@
-import { getStatsRecord } from '@/lib/pocketbase_connect';
-import DashboardOverviewClient from './DashboardOverview.client';
+import { getStatsRecord } from "@/lib/pocketbase_connect";
+import DashboardOverviewClient from "./DashboardOverview.client";
 
 export async function fetchDashboardOverviewData() {
   const statsData = await getStatsRecord();
@@ -8,7 +8,7 @@ export async function fetchDashboardOverviewData() {
 
 /**
  * Server component that fetches initial dashboard overview data and renders the client-side dashboard overview component.
- * 
+ *
  * @returns {Promise<JSX.Element>} A Promise that resolves to the DashboardOverviewClient component with fetched initial data.
  *
  * @example
