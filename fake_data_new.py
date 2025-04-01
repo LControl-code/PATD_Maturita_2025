@@ -13,7 +13,7 @@ from pocketbase import PocketBase
 # Load environment variables from .env
 load_dotenv()
 
-POCKETBASE_URL = "http://localhost/pocketbase"
+POCKETBASE_URL = os.environ.get("POCKETBASE_URL")
 ADMIN_EMAIL = os.environ.get("PB_ADMIN_EMAIL")
 ADMIN_PASS = os.environ.get("PB_ADMIN_PASS")
 

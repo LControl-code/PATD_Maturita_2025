@@ -147,7 +147,7 @@ export async function getFailedTestsGraphData() {
 // -------------------------------------------------------
 export async function getDeviceData(deviceCode: string) {
   const encoded = encodeURIComponent(deviceCode);
-  const url = `${process.env.POCKETBASE_URL}/api/deviceData?deviceCode=${encoded}`;
+  const url = `${process.env.POCKETBASE_URL}/api/deviceDataNew?deviceCode=${encoded}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch device data: ${res.statusText}`);

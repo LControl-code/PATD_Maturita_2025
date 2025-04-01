@@ -1,23 +1,23 @@
-import { getStatsRecord } from "@/lib/pocketbase_connect";
-import DashboardOverviewClient from "./DashboardOverview.client";
+import { Suspense } from 'react';
+import DashboardOverviewClient from './DashboardOverview.client';
+import { getStatsRecord } from '@/lib/pocketbase_connect';
 
-export async function fetchDashboardOverviewData() {
-  const statsData = await getStatsRecord();
-  return statsData;
+async function DashboardOverviewContent() {
+  let initialData;
+  try {
+    initialData = await getStatsRecord();
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    initialData = { error: 'Failed to fetch dashboard data' };
+  }
+  return <DashboardOverviewClient initialData={initialData} />;
 }
 
-/**
- * Server component that fetches initial dashboard overview data and renders the client-side dashboard overview component.
- *
- * @returns {Promise<JSX.Element>} A Promise that resolves to the DashboardOverviewClient component with fetched initial data.
- *
- * @example
- * // Usage in a parent component:
- * <DashboardOverview />
- */
-export default async function DashboardOverview() {
-  if (process.env.NEXT_PHASE === "phase-production-build") return [];
-
-  const initialData = await fetchDashboardOverviewData();
-  return <DashboardOverviewClient initialData={initialData} />;
+export default function DashboardOverview() {
+  if (process.env.NEXT_PHASE === 'phase-production-build') return null;
+  return (
+    <Suspense fallback={<div>Loading dashboard...</div>}>
+      <DashboardOverviewContent />
+    </Suspense>
+  );
 }
