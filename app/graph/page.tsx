@@ -1,4 +1,4 @@
-import { TestingUplot } from "@/components/graph/TestingUplot";
+import { TestingUplot } from '@/components/graph/TestingUplot';
 
 export default function Home() {
   return (

@@ -1,134 +1,140 @@
-"use client"
+'use client';
 
 import React, { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react';
 import UplotReact from 'uplot-react';
 import 'uplot/dist/uPlot.min.css';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { CalendarIcon, AlertCircle } from "lucide-react";
-import { format, startOfWeek, endOfWeek, subWeeks, addDays, subDays, subMonths, subYears } from "date-fns";
-import { pb } from "@/lib/pocketbase_connect";
-import { DateRange } from "react-day-picker";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { AlertCircle } from 'lucide-react';
+import {
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  subWeeks,
+  subMonths,
+  subDays,
+} from 'date-fns';
+import pb from '@/lib/pocketbase';
+import { DateRange } from 'react-day-picker';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
-// Types
-type Station = keyof typeof STATIONS;
+// Types for the new database schema
+interface Station {
+  id: string;
+  name: string;
+  line: string;
+}
+
+interface DeviceType {
+  id: string;
+  name: string;
+}
+
+interface Line {
+  id: string;
+  name: string;
+}
+
+interface TestDataRecord {
+  id: string;
+  device_code: string;
+  device_type: string;
+  station: string;
+  test_data: Record<string, number>;
+  test_fail: boolean;
+  time: string;
+}
+
+interface LimitRecord {
+  id: string;
+  device_type: string[];
+  station: string[];
+  limits_data: Record<string, { min: number; max: number }>;
+}
+
 interface DataPoint {
   time: string;
-  [key: string]: any;
-}
-
-// Update interfaces for station limits
-interface TestLimit {
-  motor_type: string;
-  [limitName: string]: number | string;
-}
-
-interface StationLimits {
-  [station: string]: TestLimit[];
+  value: number;
+  device_code: string;
 }
 
 // Constants
-const STATIONS = {
-  station_a20: 'A20',
-  station_a25: 'A25',
-  station_a26: 'A26',
-  station_nvh: 'NVH',
-  station_s02: 'S02',
-  station_r23: 'R23'
-} as const;
-
 const EXCLUDED_FIELDS = [
-  'time',
   'id',
+  'time',
   'created',
   'updated',
   'collectionId',
   'collectionName',
   'device_code',
-  'motor_type',
-  'test_fail'
+  'device_type',
+  'test_fail',
 ];
 
-const getAvailableTests = async (station: Station): Promise<string[]> => {
-  try {
-    const record = await pb.collection(station).getFirstListItem('');
-    return Object.keys(record).filter(key => !EXCLUDED_FIELDS.includes(key));
-  } catch (error) {
-    console.error('Error fetching tests:', error);
-    return [];
-  }
-};
-
-const generateAllData = async (
-  station: Station,
-  startDate: Date,
-  endDate: Date
-): Promise<DataPoint[]> => {
-  try {
-    const records = await pb.collection(station).getFullList<DataPoint>({
-      filter: `time>="${startDate.toISOString().split('T')[0]} 00:00:00" && time<="${endDate.toISOString().split('T')[0]} 23:59:59"`,
-    });
-
-    return records;
-  } catch (error) {
-    console.error('Error generating data:', error);
-    return [];
-  }
-};
-
 export function TestingUplot() {
-  const [selectedStation, setSelectedStation] = useState<Station>('station_s02');
-  const [availableTests, setAvailableTests] = useState<string[]>([]);
-  const [selectedTest, setSelectedTest] = useState<string>('');
-  const [data, setData] = useState<[number[], number[]]>([[], []]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Chart dimensions
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(800);
-  const [isTestsLoading, setIsTestsLoading] = useState(true); // New state for tests loading
 
-  // Cache for storing fetched data
-  const dataCache = useRef<{ [station: string]: { [range: string]: DataPoint[] } }>({});
+  // Selection state
+  const [lines, setLines] = useState<Line[]>([]);
+  const [selectedLine, setSelectedLine] = useState<string>('all'); // Default to "all"
+  const [stations, setStations] = useState<{ [lineId: string]: Station[] }>({});
+  const [selectedStation, setSelectedStation] = useState<string>('');
+  const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
+  const [selectedDeviceType, setSelectedDeviceType] = useState<string>('');
 
-  // Adjust state for station limits
-  const [stationLimits, setStationLimits] = useState<StationLimits>({});
+  // Test selection
+  const [availableTests, setAvailableTests] = useState<string[]>([]);
+  const [selectedTest, setSelectedTest] = useState<string>('');
 
-  // Replace hard-coded limits with dynamic state
-  const [upperLimit, setUpperLimit] = useState<number>(8); // Default value
-  const [lowerLimit, setLowerLimit] = useState<number>(2); // Default value
+  // Limits
+  const [limits, setLimits] = useState<Record<string, { min: number; max: number }>>({});
+  const [upperLimit, setUpperLimit] = useState<number>(8);
+  const [lowerLimit, setLowerLimit] = useState<number>(2);
 
-  // Update dateRange initial state to not go beyond 3 months ago
+  // Data
+  const [data, setData] = useState<[number[], number[]]>([[], []]);
+  const [indices, setIndices] = useState<number[]>([]);
+  const [deviceCodes, setDeviceCodes] = useState<string[]>([]);
+
+  // UI state
+  const [isLoading, setIsLoading] = useState(true);
+  const [isTestsLoading, setIsTestsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Date range
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
-    const currentDate = new Date();
-    const maxDate = currentDate;
-    const minDate = subMonths(currentDate, 3);
-    const lastWeekStart = startOfWeek(subWeeks(currentDate, 1));
-    const adjustedStart = lastWeekStart < minDate ? minDate : lastWeekStart;
-    const lastWeekEnd = endOfWeek(lastWeekStart);
-    const adjustedEnd = lastWeekEnd > maxDate ? maxDate : lastWeekEnd;
+    const today = new Date();
+    // Set default to today's date range
     return {
-      from: adjustedStart,
-      to: adjustedEnd,
+      from: startOfDay(today),
+      to: endOfDay(today),
     };
   });
 
-  // Update presetOptions to ensure date ranges are within the last 3 months
+  // Data cache
+  const dataCache = useRef<{
+    [key: string]: TestDataRecord[];
+  }>({});
+
+  // Date range presets
   const presetOptions = [
     { label: 'Today', range: { from: new Date(), to: new Date() } },
     { label: 'Yesterday', range: { from: subDays(new Date(), 1), to: subDays(new Date(), 1) } },
     { label: 'Last 7 Days', range: { from: subDays(new Date(), 7), to: new Date() } },
     { label: 'Last 30 Days', range: { from: subDays(new Date(), 30), to: new Date() } },
-    {
-      label: 'Last 3 Months',
-      range: { from: subMonths(new Date(), 3), to: new Date() }
-    },
-    // Remove or adjust presets that go beyond 3 months
+    { label: 'Last 3 Months', range: { from: subMonths(new Date(), 3), to: new Date() } },
   ];
 
+  // Set chart width based on container size
   useLayoutEffect(() => {
     const updateWidth = () => {
       if (chartContainerRef.current) {
@@ -140,298 +146,486 @@ export function TestingUplot() {
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
-  // Combine fetching tests and initial data when station changes
+  // Fetch lines and device types on component mount
   useEffect(() => {
-    const fetchTestsAndData = async () => {
-      setIsTestsLoading(true);
-      setError(null);
+    const initializeComponent = async () => {
       try {
-        const tests = await getAvailableTests(selectedStation);
-        setAvailableTests(tests);
-        if (tests.length > 0) {
-          const initialTest = tests[0];
-          setSelectedTest(initialTest);
-          // Fetch all data for the station within the date range
-          const rangeKey = `${dateRange.from?.toISOString()}_${dateRange.to?.toISOString()}`;
-          if (dataCache.current[selectedStation]?.[rangeKey]) {
-            setData(extractTestData(dataCache.current[selectedStation][rangeKey], initialTest));
-            setIndices(dataCache.current[selectedStation][rangeKey].map((_, idx) => idx));
-          } else {
-            const allData = await generateAllData(selectedStation, dateRange.from, dateRange.to);
-            if (!dataCache.current[selectedStation]) {
-              dataCache.current[selectedStation] = {};
-            }
-            dataCache.current[selectedStation][rangeKey] = allData;
-            setData(extractTestData(allData, initialTest));
-            setIndices(allData.map((_, idx) => idx));
-            if (allData.length === 0) {
-              setError('No data available for the selected parameters');
-            }
-          }
-        } else {
-          setSelectedTest('');
-          setData([[], []]);
+        // Fetch lines
+        const linesData = await pb.collection('lines').getFullList<Line>();
+        setLines(linesData);
+
+        if (linesData.length > 0) {
+          setSelectedLine(linesData[0].id);
+        }
+
+        // Fetch device types
+        const deviceTypesData = await pb.collection('device_types').getFullList<DeviceType>();
+        setDeviceTypes(deviceTypesData);
+
+        if (deviceTypesData.length > 0) {
+          setSelectedDeviceType(deviceTypesData[0].id);
         }
       } catch (error) {
-        setError('Failed to fetch tests or data');
-      } finally {
-        setIsTestsLoading(false);
-        setIsLoading(false);
+        console.error('Error initializing component:', error);
+        setError('Failed to load initial data');
       }
     };
 
-    fetchTestsAndData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStation]);
+    initializeComponent();
+  }, []);
 
-  // Separate useEffect for fetching data when dateRange changes
+  // Fetch stations when line changes
+  useEffect(() => {
+    const fetchStations = async () => {
+      try {
+        let stationsData: Station[] = [];
+
+        if (selectedLine === 'all') {
+          // Fetch stations from all lines
+          stationsData = await pb.collection('stations').getFullList<Station>();
+
+          // Group by line for organization
+          const groupedStations: { [lineId: string]: Station[] } = {};
+
+          // Initialize with empty arrays for each line
+          lines.forEach((line) => {
+            groupedStations[line.id] = [];
+          });
+
+          // Add "all" line for combined view
+          groupedStations['all'] = stationsData;
+
+          // Group stations by their line
+          stationsData.forEach((station) => {
+            if (groupedStations[station.line]) {
+              groupedStations[station.line].push(station);
+            }
+          });
+
+          setStations(groupedStations);
+        } else {
+          // Fetch stations for specific line
+          stationsData = await pb.collection('stations').getFullList<Station>({
+            filter: `line = "${selectedLine}"`,
+          });
+
+          setStations((prev) => ({ ...prev, [selectedLine]: stationsData }));
+        }
+
+        if (stationsData.length > 0) {
+          setSelectedStation(stationsData[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching stations:', error);
+        setError('Failed to load stations');
+      }
+    };
+
+    if (selectedLine || selectedLine === 'all') {
+      fetchStations();
+    }
+  }, [selectedLine, lines]);
+
+  // Fetch available tests when station and device type change
+  useEffect(() => {
+    const fetchTests = async () => {
+      if (!selectedStation || !selectedDeviceType) {
+        setAvailableTests([]);
+        setSelectedTest('');
+        return;
+      }
+
+      setIsTestsLoading(true);
+      setError(null);
+
+      try {
+        // Get a sample record to find available tests
+        const record = await pb
+          .collection('test_data')
+          .getFirstListItem<TestDataRecord>(
+            `station = "${selectedStation}" && device_type = "${selectedDeviceType}"`,
+            { sort: '-time' },
+          );
+
+        if (record && record.test_data) {
+          const tests = Object.keys(record.test_data).filter(
+            (key) => !EXCLUDED_FIELDS.includes(key),
+          );
+
+          setAvailableTests(tests);
+
+          if (tests.length > 0) {
+            setSelectedTest(tests[0]);
+          } else {
+            setSelectedTest('');
+            setError('No test data available for this combination');
+          }
+        } else {
+          setAvailableTests([]);
+          setSelectedTest('');
+          setError('No test data found for the selected parameters');
+        }
+      } catch (error) {
+        console.error('Error fetching tests:', error);
+        setAvailableTests([]);
+        setSelectedTest('');
+        setError('Failed to fetch test data');
+      } finally {
+        setIsTestsLoading(false);
+      }
+    };
+
+    fetchTests();
+  }, [selectedStation, selectedDeviceType]);
+
+  // Fetch limits when station and device type change
+  useEffect(() => {
+    const fetchLimits = async () => {
+      if (!selectedStation || !selectedDeviceType) return;
+
+      try {
+        // Try to find a matching limits record
+        const records = await pb.collection('limits').getFullList<LimitRecord>({
+          filter: `station ~ "${selectedStation}" && device_type ~ "${selectedDeviceType}"`,
+        });
+
+        if (records.length > 0 && records[0].limits_data) {
+          setLimits(records[0].limits_data);
+        } else {
+          // No matching limits found, set defaults
+          console.log(
+            `No limits found for station=${selectedStation} and device_type=${selectedDeviceType}`,
+          );
+          setLimits({});
+        }
+      } catch (error) {
+        console.error('Error fetching limits:', error);
+        setLimits({});
+      }
+    };
+
+    fetchLimits();
+  }, [selectedStation, selectedDeviceType]);
+
+  // Update upper and lower limits when selected test or limits change
+  useEffect(() => {
+    if (selectedTest && limits[selectedTest]) {
+      setUpperLimit(limits[selectedTest].max);
+      setLowerLimit(limits[selectedTest].min);
+    } else {
+      // Apply smart defaults based on data if available
+      if (data[1] && data[1].length > 0) {
+        // If we have data but no limits, estimate reasonable bounds
+        const values = data[1].filter((v) => v !== null && v !== undefined);
+        if (values.length > 0) {
+          const min = Math.min(...values);
+          const max = Math.max(...values);
+          const range = max - min;
+
+          // Set bounds with 10% padding
+          setUpperLimit(max + range * 0.1);
+          setLowerLimit(min - range * 0.1);
+          return;
+        }
+      }
+
+      // Fallback to default values if no data or limits found
+      setUpperLimit(8);
+      setLowerLimit(2);
+    }
+  }, [selectedTest, limits, data]);
+
+  // Fetch test data when parameters change
   useEffect(() => {
     const fetchData = async () => {
-      if (!dateRange?.from || !dateRange?.to) return;
+      if (
+        !selectedStation ||
+        !selectedDeviceType ||
+        !selectedTest ||
+        !dateRange?.from ||
+        !dateRange?.to
+      ) {
+        return;
+      }
 
       setIsLoading(true);
       setError(null);
+
       try {
-        const rangeKey = `${dateRange.from?.toISOString()}_${dateRange.to?.toISOString()}`;
-        if (dataCache.current[selectedStation]?.[rangeKey]) {
-          setData(extractTestData(dataCache.current[selectedStation][rangeKey], selectedTest));
-          setIndices(dataCache.current[selectedStation][rangeKey].map((_, idx) => idx));
+        const cacheKey = `${selectedStation}_${selectedDeviceType}_${dateRange.from.toISOString()}_${dateRange.to.toISOString()}`;
+
+        if (!dataCache.current[cacheKey]) {
+          const records = await pb.collection('test_data').getFullList<TestDataRecord>({
+            filter: `station = "${selectedStation}" && device_type = "${selectedDeviceType}" && time >= "${dateRange.from.toISOString()}" && time <= "${dateRange.to.toISOString()}"`,
+            sort: 'time',
+          });
+
+          dataCache.current[cacheKey] = records;
+        }
+
+        const cachedData = dataCache.current[cacheKey];
+
+        if (cachedData.length === 0) {
+          setError('No data available for the selected parameters');
+          setData([[], []]);
+          setIndices([]);
+          setDeviceCodes([]);
         } else {
-          const allData = await generateAllData(selectedStation, dateRange.from, dateRange.to);
-          if (!dataCache.current[selectedStation]) {
-            dataCache.current[selectedStation] = {};
-          }
-          dataCache.current[selectedStation][rangeKey] = allData;
-          setData(extractTestData(allData, selectedTest));
-          setIndices(allData.map((_, idx) => idx));
-          if (allData.length === 0) {
-            setError('No data available for the selected parameters');
-          }
+          const [timestamps, values, codes] = extractTestData(cachedData, selectedTest);
+          setData([timestamps, values]);
+          setIndices(Array.from({ length: timestamps.length }, (_, i) => i));
+          setDeviceCodes(codes);
         }
       } catch (error) {
+        console.error('Error fetching data:', error);
         setError('Failed to fetch data');
+        setData([[], []]);
+        setIndices([]);
+        setDeviceCodes([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    // Avoid fetching data again if it's already fetched during station change
-    if (!isTestsLoading) {
-      fetchData();
-    }
-  }, [dateRange]);
+    fetchData();
+  }, [selectedStation, selectedDeviceType, selectedTest, dateRange]);
 
-  // Add a state for indices
-  const [indices, setIndices] = useState<number[]>([]);
-
-  // Function to extract test data from all data
-  const extractTestData = (allData: DataPoint[], test: string): [number[], number[]] => {
+  // Extract test data from records
+  const extractTestData = (
+    records: TestDataRecord[],
+    test: string,
+  ): [number[], number[], string[]] => {
     const timestamps: number[] = [];
     const values: number[] = [];
+    const deviceCodes: string[] = [];
 
-    allData.forEach(record => {
-      timestamps.push(new Date(record.time).getTime() / 1000);
-      values.push(record[test]);
+    records.forEach((record) => {
+      if (record.test_data && test in record.test_data) {
+        timestamps.push(new Date(record.time).getTime() / 1000);
+        values.push(record.test_data[test]);
+        deviceCodes.push(record.device_code);
+      }
     });
 
-    return [timestamps, values];
+    return [timestamps, values, deviceCodes];
   };
 
-  // Update fetchStationLimits to handle API array structure
-  const fetchStationLimits = async () => {
-    try {
-      const response = await fetch('/api/data/stations');
-      const data: any[] = await response.json();
-      const limitsMap: StationLimits = {};
+  // Chart options
+  const options = useMemo(() => {
+    // Find the selected station and device type names for title
+    const stationName =
+      stations[selectedLine]?.find((s) => s.id === selectedStation)?.name || 'Unknown Station';
+    const deviceTypeName =
+      deviceTypes.find((dt) => dt.id === selectedDeviceType)?.name || 'Unknown Type';
 
-      data.forEach(stationEntry => {
-        Object.entries(stationEntry).forEach(([station, limitsArray]) => {
-          if (!limitsMap[station]) {
-            limitsMap[station] = [];
+    return {
+      title: `${stationName} - ${deviceTypeName} - ${selectedTest}`,
+      width: chartWidth,
+      height: 500,
+      series: [
+        {},
+        {
+          show: true,
+          spanGaps: true,
+          label: selectedTest,
+          stroke: 'orange',
+          width: 2,
+          value: (self: any, rawValue: number) => (rawValue ? `${rawValue}` : '--'),
+          scale: 'y',
+          points: {
+            show: true,
+            size: 5,
+            fill: 'orange',
+          },
+        },
+        {
+          show: true,
+          spanGaps: true,
+          label: 'Upper Limit',
+          stroke: 'red',
+          width: 1,
+          dash: [5, 5],
+          scale: 'y',
+          points: { show: false },
+        },
+        {
+          show: true,
+          spanGaps: true,
+          label: 'Lower Limit',
+          stroke: 'blue',
+          width: 1,
+          dash: [5, 5],
+          scale: 'y',
+          points: { show: false },
+        },
+      ],
+      scales: {
+        x: {
+          time: false,
+        },
+        y: {
+          auto: true,
+          side: 3,
+        },
+      },
+      axes: [
+        {
+          scale: 'x',
+          values: (self: any, ticks: number[]) =>
+            ticks.map((v) => {
+              const index = Math.floor(v);
+              const timestamp = data[0][index];
+              return timestamp ? new Date(timestamp * 1000).toLocaleDateString() : '';
+            }),
+          space: 80,
+          grid: { show: true, stroke: '#e0e0e0', width: 1, dash: [5, 5] },
+          ticks: { show: true, size: 10, stroke: '#000', width: 1 },
+          side: 2,
+          label: 'Date',
+        },
+        {
+          scale: 'y',
+          values: (self: any, ticks: number[]) => ticks.map((v) => `${v}`),
+          grid: { show: true, stroke: '#e0e0e0', width: 1, dash: [5, 5] },
+          ticks: { show: true, size: 10, stroke: '#000', width: 1 },
+          side: 3,
+          label: selectedTest,
+        },
+      ],
+      cursor: {
+        drag: {
+          x: true,
+          y: false,
+        },
+        y: false,
+        x: false,
+        points: {
+          show: true,
+          size: 5,
+          fill: 'orange',
+        },
+        dataIdx: (self: any, seriesIdx: number, closestIdx: number) => {
+          if (seriesIdx === 1) {
+            // When hovering over a point, show device code in tooltip
+            const deviceCode = deviceCodes[closestIdx];
+            if (deviceCode) {
+              self.over.title = `Device: ${deviceCode}`;
+            }
           }
-          limitsMap[station].push(...limitsArray);
-        });
-      });
-
-      console.log('Fetched station limits:', limitsMap);
-      setStationLimits(limitsMap);
-    } catch (error) {
-      console.error('Error fetching station limits:', error);
-      // Optionally handle error state
-    }
-  };
-
-  // Fetch station limits on component mount
-  useEffect(() => {
-    fetchStationLimits();
-  }, []);
-
-  // Update limits when selectedTest or stationLimits change
-  useEffect(() => {
-    if (selectedTest && stationLimits[selectedStation]) {
-      const stationTests = stationLimits[selectedStation];
-      for (const testLimit of stationTests) {
-        const upperKey = `${selectedTest}_MAX`;
-        const lowerKey = `${selectedTest}_MIN`;
-        if (upperKey in testLimit && lowerKey in testLimit) {
-          const upper = testLimit[upperKey];
-          const lower = testLimit[lowerKey];
-          if (typeof upper === 'number' && typeof lower === 'number') {
-            setUpperLimit(upper);
-            setLowerLimit(lower);
-            break;
-          }
-        }
-      }
-    }
-  }, [selectedTest, stationLimits, selectedStation]);
-
-  // Update data when selected test changes
-  useEffect(() => {
-    if (selectedTest && dataCache.current[selectedStation]) {
-      const rangeKey = `${dateRange.from?.toISOString()}_${dateRange.to?.toISOString()}`;
-      const cachedData = dataCache.current[selectedStation][rangeKey];
-      if (cachedData) {
-        setData(extractTestData(cachedData, selectedTest));
-      }
-    }
-  }, [selectedTest]);
-
-  const options = useMemo(() => ({
-    title: `${STATIONS[selectedStation]} - ${selectedTest}`,
-    width: chartWidth,
-    height: 500,
-    series: [
-      {},
-      {
-        show: true,
-        spanGaps: true,
-        label: selectedTest,
-        stroke: "orange",
-        width: 2,
-        value: (self: any, rawValue: number) => rawValue ? `${rawValue}` : "--",
-        scale: 'y',
-        points: { show: false } // Hide the dots
+          return closestIdx;
+        },
       },
-      {
-        show: true,
-        spanGaps: true,
-        label: "Upper Limit",
-        stroke: "red",
-        width: 1,
-        dash: [5, 5],
-        scale: 'y',
-        points: { show: false } // Hide the dots
+      hooks: {
+        setCursor: [
+          (self: any) => {
+            const idx = self.cursor.idx;
+            if (idx !== null && deviceCodes[idx]) {
+              self.over.title = `Device: ${deviceCodes[idx]}`;
+            }
+          },
+        ],
       },
-      {
-        show: true,
-        spanGaps: true,
-        label: "Lower Limit",
-        stroke: "blue",
-        width: 1,
-        dash: [5, 5],
-        scale: 'y',
-        points: { show: false } // Hide the dots
-      }
-    ],
-    scales: {
-      x: {
-        time: false // Set time to false to use ordinal scale
-      },
-      y: {
-        auto: true,
-        side: 3
-      }
-    },
-    axes: [
-      {
-        scale: "x",
-        // Update values to display dates from original timestamps
-        values: (self: any, ticks: number[]) => ticks.map(v => {
-          const index = Math.floor(v);
-          const timestamp = data[0][index];
-          return timestamp ? new Date(timestamp * 1000).toLocaleDateString() : '';
-        }),
-        space: 80,
-        grid: { show: true, stroke: "#e0e0e0", width: 1, dash: [5, 5] },
-        ticks: { show: true, size: 10, stroke: "#000", width: 1 },
-        side: 2,
-        label: "Date"
-      },
-      {
-        scale: 'y',
-        values: (self: any, ticks: number[]) => ticks.map(v => `${v} V`),
-        grid: { show: true, stroke: "#e0e0e0", width: 1, dash: [5, 5] },
-        ticks: { show: true, size: 10, stroke: "#000", width: 1 },
-        side: 3,
-        label: selectedTest
-      }
-    ],
-    cursor: {
-      drag: {
-        x: true,
-        y: false
-      },
-      y: false,
-      x: false,
-    }
-  }), [selectedTest, chartWidth, data, upperLimit, lowerLimit]);
-
-  // Ensure manual date selections are within the allowed range
-  useEffect(() => {
-    if (dateRange?.from && dateRange.to) {
-      const minDate = subMonths(new Date(), 3);
-      const maxDate = new Date();
-      const adjustedFrom = dateRange.from < minDate ? minDate : dateRange.from;
-      const adjustedTo = dateRange.to > maxDate ? maxDate : dateRange.to;
-      if (adjustedFrom !== dateRange.from || adjustedTo !== dateRange.to) {
-        setDateRange({ from: adjustedFrom, to: adjustedTo });
-      }
-    }
-  }, [dateRange]);
+    };
+  }, [
+    selectedTest,
+    chartWidth,
+    data,
+    upperLimit,
+    lowerLimit,
+    selectedLine,
+    selectedStation,
+    selectedDeviceType,
+    stations,
+    deviceTypes,
+    deviceCodes,
+  ]);
 
   return (
     <Card className="w-full rounded">
       <CardHeader className="flex flex-col gap-4 border-b">
         <div className="flex flex-row justify-between items-center">
           <div className="flex flex-col gap-1">
-            <CardTitle>Time Series Chart</CardTitle>
+            <CardTitle>SPC Chart</CardTitle>
             <CardDescription>
               {dateRange?.from && dateRange?.to
-                ? `${format(dateRange.from, 'PP')} - ${format(dateRange.to, 'PP')}`
-                : 'Select a date range'
-              }
+                ? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
+                : 'Select a date range'}
             </CardDescription>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-2 sm:gap-4">
+            {/* Line Selection */}
             <Select
-              value={selectedStation}
-              onValueChange={(station) => {
-                setSelectedStation(station as Station);
-                setSelectedTest('');
+              value={selectedLine}
+              onValueChange={(line) => {
+                setSelectedLine(line);
                 setError(null);
               }}
             >
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Select station" />
+              <SelectTrigger className="w-24 sm:w-32">
+                <SelectValue placeholder="Line" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATIONS).map(([key, name]) => (
-                  <SelectItem key={key} value={key}>
-                    {name}
+                <SelectItem value="all">All Lines</SelectItem>
+                {lines.map((line) => (
+                  <SelectItem key={line.id} value={line.id}>
+                    {line.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Station Selection */}
+            <Select
+              value={selectedStation}
+              onValueChange={(station) => {
+                setSelectedStation(station);
+                setError(null);
+              }}
+              disabled={!selectedLine || !stations[selectedLine]?.length}
+            >
+              <SelectTrigger className="w-24 sm:w-32">
+                <SelectValue placeholder="Station" />
+              </SelectTrigger>
+              <SelectContent>
+                {selectedLine &&
+                  stations[selectedLine]?.map((station) => (
+                    <SelectItem key={station.id} value={station.id}>
+                      {station.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+
+            {/* Device Type Selection */}
+            <Select
+              value={selectedDeviceType}
+              onValueChange={(type) => {
+                setSelectedDeviceType(type);
+                setError(null);
+              }}
+            >
+              <SelectTrigger className="w-24 sm:w-32">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                {deviceTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Test Selection */}
             <Select
               value={selectedTest}
               onValueChange={(test) => {
                 setSelectedTest(test);
                 setError(null);
               }}
-              disabled={availableTests.length === 0}
+              disabled={availableTests.length === 0 || isTestsLoading}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-32 sm:w-40">
                 <SelectValue placeholder="Select test" />
               </SelectTrigger>
               <SelectContent>
@@ -442,51 +636,60 @@ export function TestingUplot() {
                 ))}
               </SelectContent>
             </Select>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from && dateRange?.to ? (
-                    `${format(dateRange.from, 'PP')} - ${format(dateRange.to, 'PP')}`
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-2" align="start">
-                <Select
-                  onValueChange={(value) => {
-                    const selectedPreset = presetOptions.find(option => option.label === value);
-                    if (selectedPreset) {
-                      setDateRange(selectedPreset.range);
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Preset" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {presetOptions.map(option => (
-                      <SelectItem key={option.label} value={option.label}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="rounded-md border mt-2">
-                  <Calendar
-                    mode="range"
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                    disabled={{
-                      before: subMonths(new Date(), 3),
-                      after: new Date(),
-                    }}
-                  />
-                </div>
-              </PopoverContent>
-            </Popover>
+
+            {/* Date Range Selection */}
+            <Select
+              defaultValue="today"
+              onValueChange={(value) => {
+                const today = new Date();
+
+                switch (value) {
+                  case 'today':
+                    setDateRange({
+                      from: startOfDay(today),
+                      to: endOfDay(today),
+                    });
+                    break;
+                  case 'this-week':
+                    setDateRange({
+                      from: startOfWeek(today, { weekStartsOn: 1 }),
+                      to: today,
+                    });
+                    break;
+                  case 'last-week':
+                    const lastWeekStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
+                    const lastWeekEnd = endOfWeek(lastWeekStart, { weekStartsOn: 1 });
+                    setDateRange({
+                      from: lastWeekStart,
+                      to: lastWeekEnd,
+                    });
+                    break;
+                  case 'last-2-weeks':
+                    setDateRange({
+                      from: startOfWeek(subWeeks(today, 2), { weekStartsOn: 1 }),
+                      to: today,
+                    });
+                    break;
+                  case 'last-month':
+                    setDateRange({
+                      from: subMonths(today, 1),
+                      to: today,
+                    });
+                    break;
+                }
+              }}
+            >
+              <SelectTrigger className="w-32 sm:w-40">
+                <SelectValue placeholder="Date range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="this-week">This week</SelectItem>
+                <SelectItem value="last-week">Last week</SelectItem>
+                <SelectItem value="last-2-weeks">Last 2 weeks</SelectItem>
+                <SelectItem value="last-month">Last month</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -504,10 +707,10 @@ export function TestingUplot() {
           <UplotReact
             options={options}
             data={[
-              indices,                                  // Use indices for x-axis
-              data[1],                                  // Values
-              Array(indices.length).fill(upperLimit),   // Upper limit line
-              Array(indices.length).fill(lowerLimit)    // Lower limit line
+              indices, // Use indices for x-axis
+              data[1], // Values
+              Array(indices.length).fill(upperLimit), // Upper limit line
+              Array(indices.length).fill(lowerLimit), // Lower limit line
             ]}
           />
         )}
