@@ -9,12 +9,11 @@ import {
   LiveErrorsResponse
 } from "@/types/pocketbase-types";
 
-import PocketBase from "pocketbase";
+import pb from "@/lib/pocketbase";
 
 // -------------------------------------------------------
 // Initialize PocketBase client
 // -------------------------------------------------------
-export const pb = new PocketBase(`${process.env.POCKETBASE_URL}`) as TypedPocketBase;
 pb.autoCancellation(false);
 
 // -------------------------------------------------------
@@ -145,14 +144,192 @@ export async function getFailedTestsGraphData() {
 // 6) getDeviceData(deviceCode: string)
 // [Now calls your new /api/deviceData?deviceCode=... route]
 // -------------------------------------------------------
+
+interface PocketbaseFailure {
+  id: string;
+  test_data: string;
+  test: string;
+  value: number;
+  limit: number;
+  offset: number;
+  type: 'above' | 'below';
+  station: string;
+}
+
+interface StationInfo {
+  id: string;
+  name: string;
+  status: 'passed' | 'failed' | 'pending' | 'in-progress';
+  line: string;
+  tests: Array<{
+    name: string;
+    result: 'passed' | 'failed';
+    measuredValue: number;
+    offsetFromLimit: string | null;
+  }>;
+}
+
 export async function getDeviceData(deviceCode: string) {
-  const encoded = encodeURIComponent(deviceCode);
-  const url = `${process.env.POCKETBASE_URL}/api/deviceDataNew?deviceCode=${encoded}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch device data: ${res.statusText}`);
+  try {
+    console.log(`Fetching device: ${deviceCode}`);
+
+    // 1. Get all test data records for this device
+    const testRecords = await pb.collection('test_data').getFullList({
+      filter: `device_code = "${deviceCode}"`,
+      sort: 'time'
+    });
+
+    if (testRecords.length === 0) {
+      throw new Error(`No test data found for device ${deviceCode}`);
+    }
+
+    const latestTest = testRecords[testRecords.length - 1];
+
+    // 2. Resolve device type name
+    let deviceTypeName = 'Unknown';
+    try {
+      if (latestTest.device_type) {
+        const deviceType = await pb.collection('device_types').getOne(latestTest.device_type);
+        deviceTypeName = deviceType.name;
+      }
+    } catch (e) {
+      console.warn('Failed to get device type name:', e);
+    }
+
+    // 3. Resolve current station and line
+    let stationName = 'Unknown';
+    let lineName = 'Unknown';
+    let lineId = null;
+
+    try {
+      if (latestTest.station) {
+        const station = await pb.collection('stations').getOne(latestTest.station);
+        stationName = station.name;
+
+        if (station.line) {
+          lineId = station.line;
+          const line = await pb.collection('lines').getOne(station.line);
+          lineName = line.name;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to get station or line information:', e);
+    }
+
+    // 4. Get all stations in manufacturing flow, prioritizing current line
+    let stations: StationInfo[] = [];
+    try {
+      // Get station and line information
+      const allStations = await pb.collection('stations').getFullList();
+      const allLines = await pb.collection('lines').getFullList();
+
+      // Create lookup maps for quick access
+      const stationMap = new Map(allStations.map(s => [s.id, s]));
+      const lineMap = new Map(allLines.map(l => [l.id, l]));
+
+      // Create station by name map, prioritizing the current line
+      const stationsByName = new Map();
+
+      for (const station of allStations) {
+        const line = lineMap.get(station.line) || { name: 'Unknown' };
+
+        // Skip stations we've already seen unless they're from the current line
+        if (stationsByName.has(station.name) && station.line !== lineId) {
+          continue;
+        }
+
+        stationsByName.set(station.name, {
+          id: station.id,
+          name: station.name,
+          status: 'pending',
+          line: line.name,
+          tests: []
+        });
+      }
+
+      // Process each test record - maintain latest record per station
+      const latestTestByStation = new Map();
+
+      for (const record of testRecords) {
+        const stationId = record.station;
+        if (!stationId) continue;
+
+        const station = stationMap.get(stationId);
+        if (!station) continue;
+
+        // Track the latest test per station
+        latestTestByStation.set(station.name, record);
+      }
+
+      // Now process test data for each station's latest test
+      for (const [stationName, testRecord] of latestTestByStation.entries()) {
+        const stationInfo = stationsByName.get(stationName);
+        if (!stationInfo) continue;
+
+        // Process test data
+        const testData = testRecord.test_data || {};
+        const tests = [];
+
+        // Get failures for just this specific test record (avoids filter issue)
+        let recordFailures: PocketbaseFailure[] = [];
+        try {
+          recordFailures = await pb.collection('failures').getFullList({
+            filter: `test_data = "${testRecord.id}"`
+          });
+        } catch (e) {
+          console.warn(`Failed to get failures for test ${testRecord.id}:`, e);
+        }
+
+        for (const [testName, value] of Object.entries(testData)) {
+          // Skip non-numeric values and special fields
+          if (typeof value !== 'number') continue;
+          if (['Finish_Temp', 'Start_Temp'].includes(testName)) continue;
+
+          // Find if this test failed
+          const failure = recordFailures.find(f => f.test === testName);
+
+          const test = {
+            name: testName,
+            result: failure ? 'failed' : 'passed',
+            measuredValue: value,
+            offsetFromLimit: failure ?
+              (failure.type === 'above' ? `+${failure.offset.toFixed(3)}` : `-${failure.offset.toFixed(3)}`) :
+              null
+          };
+
+          tests.push(test);
+        }
+
+        // Update station status based on test results
+        stationInfo.status = tests.some(t => t.result === 'failed') ? 'failed' : 'passed';
+        stationInfo.tests = tests;
+      }
+
+      // Convert map to array for output
+      stations = Array.from(stationsByName.values()).map(s => ({
+        name: s.name,
+        status: s.status,
+        line: s.line,
+        tests: s.tests
+      }));
+
+      // Sort by station name for consistent order
+      stations.sort((a, b) => a.name.localeCompare(b.name));
+    } catch (e) {
+      console.warn('Failed to process stations:', e);
+    }
+
+    return {
+      code: deviceCode,
+      type: deviceTypeName,
+      currentStation: stationName,
+      currentLine: lineName,
+      stations: stations
+    };
+  } catch (error) {
+    console.error('Error fetching device data:', error);
+    throw error;
   }
-  return await res.json();
 }
 
 // -------------------------------------------------------

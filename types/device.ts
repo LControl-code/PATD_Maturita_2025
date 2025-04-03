@@ -2,21 +2,23 @@ export type TestResult = 'passed' | 'failed' | 'in-progress' | 'pending';
 
 export interface Test {
   name: string;
-  result: TestResult;
-  measuredValue?: string;
-  offsetFromLimit?: string;
+  result: 'passed' | 'failed';
+  measuredValue?: number | string;
+  offsetFromLimit?: string | number;
 }
 
 export interface Station {
   name: string;
-  status: TestResult;
+  status: 'passed' | 'failed' | 'in-progress' | 'pending';
   tests: Test[];
+  line: string; // Added line property
 }
 
 export interface Device {
   code: string;
   type: string;
   currentStation: string;
+  currentLine: string; // Added currentLine property
   stations: Station[];
 }
 
