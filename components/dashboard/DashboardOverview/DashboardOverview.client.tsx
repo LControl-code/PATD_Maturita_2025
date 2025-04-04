@@ -1,56 +1,20 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { motion } from "framer-motion";
-import { Zap } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { motion } from 'framer-motion';
+import { Zap } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-interface StatsData {
-  id: string;
-  totalTested: number;
-  activeStations?: number;
-  todaysProduction?: number;
-  overallEfficiency?: number;
-}
-
-interface DashboardOverviewProps {
-  initialData: StatsData;
-}
+import type { DashboardOverviewProps } from './types';
 
 /**
- * Client-side component that displays an overview dashboard with key statistics.
+ * Client component that displays dashboard statistics with animations and tooltips.
  *
  * @component
- * @param {Object} props - Component props
- * @param {StatsData} props.initialData - Initial statistics data to display
- *
- * @returns {JSX.Element} A card containing statistics including:
- * - Total number of tested devices
- * - Number of active stations
- * - Today's production percentage
- * - Overall efficiency with progress bar
- *
- * The component includes animations on mount and displays loading state
- * if stats are not available (rare case due to SSR).
  */
-export default function DashboardOverviewClient({
-  initialData,
-}: DashboardOverviewProps) {
-  const [stats, setStats] = useState<StatsData>(initialData);
-
-  // If stats are not loaded (rare, since we had initialData), we can show a fallback
-  // but realistically we always have something from server side
-  if (!stats) {
-    return <div>Loading...</div>;
-  }
-
+export function DashboardOverviewClient({ data }: DashboardOverviewProps) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -50 }}
@@ -70,22 +34,19 @@ export default function DashboardOverviewClient({
             {/* TOTAL DEVICES */}
             <div>
               <p className="font-semibold">Total Devices:</p>
-              <p className="text-2xl font-bold">{stats.totalTested ?? 0}</p>
+              <p className="text-2xl font-bold">{data.totalTested}</p>
             </div>
 
             {/* ACTIVE STATIONS */}
             <div>
               <p className="font-semibold">Active Stations:</p>
-              <p className="text-2xl font-bold">{stats.activeStations ?? 0}</p>
+              <p className="text-2xl font-bold">{data.activeStations}</p>
             </div>
 
             {/* TODAY'S PRODUCTION */}
             <div>
               <p className="font-semibold">Today&apos;s Production:</p>
-              {/* e.g. 45.8 => "45.8 %" */}
-              <p className="text-2xl font-bold">
-                {stats.todaysProduction?.toFixed(1) ?? 0} %
-              </p>
+              <p className="text-2xl font-bold">{data.todaysProduction.toFixed(1)} %</p>
             </div>
 
             {/* OVERALL EFFICIENCY (progress bar) */}
@@ -96,17 +57,12 @@ export default function DashboardOverviewClient({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="w-full">
-                      <Progress
-                        value={stats.overallEfficiency ?? 0}
-                        className="mt-2"
-                      />
+                      <Progress value={data.overallEfficiency} className="mt-2" />
                     </div>
                   </TooltipTrigger>
 
                   <TooltipContent>
-                    <p>
-                      {stats.overallEfficiency?.toFixed(1) ?? 0}% Efficiency
-                    </p>
+                    <p>{data.overallEfficiency.toFixed(1)}% Efficiency</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

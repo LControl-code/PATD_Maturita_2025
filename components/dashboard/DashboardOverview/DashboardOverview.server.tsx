@@ -1,23 +1,37 @@
 import { Suspense } from 'react';
-import DashboardOverviewClient from './DashboardOverview.client';
-import { getStatsRecord } from '@/lib/pocketbase_connect';
+import { DashboardOverviewClient } from './DashboardOverview.client';
+import type { DashboardStats } from './types';
 
-async function DashboardOverviewContent() {
-  let initialData;
-  try {
-    initialData = await getStatsRecord();
-  } catch (error) {
-    console.error('Error fetching data:', error);
-    initialData = { error: 'Failed to fetch dashboard data' };
-  }
-  return <DashboardOverviewClient initialData={initialData} />;
+/**
+ * Fetches dashboard statistics data
+ * Currently returns mock data but would integrate with Pocketbase in production
+ */
+async function getDashboardStats(): Promise<DashboardStats> {
+  // Mock data for development
+  // Replace this with actual data fetching in production
+  // e.g. return await getStatsRecord();
+
+  return {
+    totalTested: 12584,
+    activeStations: 8,
+    todaysProduction: 45.8,
+    overallEfficiency: 78.5,
+  };
 }
 
-export default function DashboardOverview() {
-  if (process.env.NEXT_PHASE === 'phase-production-build') return null;
-  return (
-    <Suspense fallback={<div>Loading dashboard...</div>}>
-      <DashboardOverviewContent />
-    </Suspense>
-  );
+/**
+ * Server component that fetches dashboard data and passes it to the client component
+ */
+export default async function DashboardOverview() {
+  try {
+    const data = await getDashboardStats();
+    return <DashboardOverviewClient data={data} />;
+  } catch (error) {
+    console.error('Failed to load dashboard stats:', error);
+    return (
+      <div className="p-4 text-red-500 border border-red-200 rounded-md">
+        Error loading dashboard data
+      </div>
+    );
+  }
 }

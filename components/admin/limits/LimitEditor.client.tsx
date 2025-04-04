@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Save, Filter } from 'lucide-react';
-import { toast } from 'sonner'; // Assuming you use sonner for toast notifications
+import { toast } from 'sonner';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
@@ -147,7 +147,7 @@ export function LimitsEditor({
         let isValid = true;
         for (const testName in updatedLimitData) {
           if (updatedLimitData[testName].min > updatedLimitData[testName].max) {
-            toast.error(`Invalid range for ${testName}: Min must be less than Max`);
+            toast(`Invalid range for ${testName}: Min must be less than Max`);
             isValid = false;
             break;
           }
@@ -189,10 +189,10 @@ export function LimitsEditor({
       setLimits(updatedLimits);
       setEditedLimits({});
       setHasChanges(false);
-      toast.success('Limits updated successfully');
+      toast('Limits updated successfully');
     } catch (error) {
       console.error('Error saving limits:', error);
-      toast.error(`Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast(`Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
