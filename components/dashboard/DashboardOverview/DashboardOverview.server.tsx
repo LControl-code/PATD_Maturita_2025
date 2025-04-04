@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { DashboardOverviewClient } from './DashboardOverview.client';
 import type { DashboardStats } from './types';
+import { useBuildSafeData } from '@/lib/buildSafeData';
 
 /**
  * Fetches dashboard statistics data
@@ -23,15 +24,11 @@ async function getDashboardStats(): Promise<DashboardStats> {
  * Server component that fetches dashboard data and passes it to the client component
  */
 export default async function DashboardOverview() {
-  try {
-    const data = await getDashboardStats();
-    return <DashboardOverviewClient data={data} />;
-  } catch (error) {
-    console.error('Failed to load dashboard stats:', error);
-    return (
-      <div className="p-4 text-red-500 border border-red-200 rounded-md">
-        Error loading dashboard data
-      </div>
-    );
-  }
+  const data = await useBuildSafeData(getDashboardStats, {
+    totalTested: 0,
+    activeStations: 0,
+    todaysProduction: 0,
+    overallEfficiency: 0,
+  });
+  return <DashboardOverviewClient data={data} />;
 }

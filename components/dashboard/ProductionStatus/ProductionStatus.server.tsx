@@ -1,5 +1,6 @@
 // components/dashboard/ProductionStatus/ProductionStatus.server.tsx
 
+import { useBuildSafeData } from '@/lib/buildSafeData';
 import { ProductionStatusClient } from './ProductionStatus.client';
 import type { ProductionStatusData } from './types';
 
@@ -19,7 +20,12 @@ async function getProductionData(): Promise<ProductionStatusData> {
 
 export default async function ProductionStatus() {
   // Server-side data fetching
-  const data = await getProductionData();
+  const data = await useBuildSafeData(getProductionData, {
+    productionRate: 0,
+    devicesProduced: 0,
+    totalDevices: 0,
+    estimatedCompletion: 'Unknown',
+  });
 
   // Pass data to client component
   return <ProductionStatusClient data={data} />;

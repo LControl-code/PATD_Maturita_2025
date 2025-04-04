@@ -139,7 +139,9 @@ const LiveErrorsClient: React.FC<LiveErrorsProps> = ({ initialData }) => {
                               </Badge>
                             </div>
                           </SheetTrigger>
-                          <SheetContent>
+                          <SheetContent
+                            side="right"
+                          >
                             <div className="flex flex-col h-full">
                               <SheetHeader>
                                 <SheetTitle className="text-2xl font-bold">

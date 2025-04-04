@@ -2,6 +2,7 @@
 
 import TodaysMostFailsClient from './TodaysMostFails.client'
 import { FailsData } from './types'
+import {useBuildSafeData} from "@/lib/buildSafeData";
 
 /**
  * Fetches today's most failed items data from the API.
@@ -37,7 +38,14 @@ export async function fetchTodaysMostFailsData(): Promise<FailsData> {
  * @async
  */
 export default async function TodaysMostFails() {
-    if (process.env.NEXT_PHASE === "phase-production-build") return [];
-    const initialData = await fetchTodaysMostFailsData()
+    const initialData = await useBuildSafeData(fetchTodaysMostFailsData, {
+        "Top Fails": {
+            Global: {
+                topTests: [],
+                totalFails: 0
+            },
+            Stations: []
+        }
+    });
     return <TodaysMostFailsClient initialData={initialData} />
 }

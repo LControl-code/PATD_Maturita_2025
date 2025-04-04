@@ -1,3 +1,4 @@
+import { useBuildSafeData } from '@/lib/buildSafeData'
 import LiveErrorsClient from './LiveErrors.client'
 import { ErrorData } from '@/types/errors'
 
@@ -28,7 +29,6 @@ export async function fetchLiveErrorsData(): Promise<ErrorData[]> {
  * @async
  */
 export default async function LiveErrors() {
-  if (process.env.NEXT_PHASE === "phase-production-build") return [];
-  const initialData = await fetchLiveErrorsData()
+  const initialData = await useBuildSafeData(fetchLiveErrorsData, [])
   return <LiveErrorsClient initialData={initialData} />
 }
