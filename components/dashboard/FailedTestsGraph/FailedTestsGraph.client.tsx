@@ -38,39 +38,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 // Types
-import { TestRecord, FailsData } from "./types";
+import { TestRecord, FailsData, FailedTestsGraphProps } from "./types";
 
 // Constants
 const ITEMS_PER_PAGE = 10;
 
 /**
- * A component that displays a graph of failed tests organized by station and line.
+ * Client component that displays a graph of failed tests organized by station and line.
  * 
- * @component
- * @param {Object} props - The component props
- * @param {FailsData} props.initialData - Initial data containing test failure information organized by station
- * 
- * @remarks
- * The component features:
+ * Features:
  * - Station and line filtering
  * - Interactive bar chart showing failed tests
  * - Detailed view of failed test records in a paginated table
- * - Color-coded bars based on failure frequency:
- *   - Red (#7f1d1d): ≥50 fails
- *   - Bright Red (#dc2626): 25-49 fails
- *   - Orange (#f97316): 10-24 fails
- *   - Yellow (#facc15): 1-9 fails
- *   - Green (#22c55e): 0 fails
- * 
- * @returns A responsive card component containing:
- * - Station and line selection dropdowns
- * - Summary statistics (total failures and most critical test)
- * - Interactive bar chart of failed tests
- * - Detailed table view of selected test failures with pagination
+ * - Color-coded bars based on failure frequency
  */
-export default function FailedTestsGraph({ initialData }: { initialData: FailsData }) {
+export function FailedTestsGraphClient({ data }: FailedTestsGraphProps) {
     // State management
-    const [data, setData] = useState<FailsData>(initialData);
+    const [failsData, setFailsData] = useState<FailsData>(data);
     const [selectedStation, setSelectedStation] = useState<string>("");
     const [selectedLine, setSelectedLine] = useState<string>("all");
     const [selectedTest, setSelectedTest] = useState<string | null>(null);
@@ -78,17 +62,18 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
     const [columnFilters, setColumnFilters] = useState<RT.ColumnFiltersState>([]);
     const [sorting, setSorting] = useState<RT.SortingState>([]);
 
+    // Update data when props change
     useEffect(() => {
-        setData(initialData);
-    }, [initialData]);
+        setFailsData(data);
+    }, [data]);
 
-    // Effect to set initial station
+    // Effect to set initial station or handle empty data
     useEffect(() => {
-        const stationNames = Object.keys(data);
+        const stationNames = Object.keys(failsData || {});
         if (stationNames.length > 0 && !selectedStation) {
             setSelectedStation(stationNames[0]);
         }
-    }, [data, selectedStation]);
+    }, [failsData, selectedStation]);
 
     // Handlers
     const handleStationChange = useCallback((station: string) => {
@@ -111,19 +96,19 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
 
     // Derived data
     const lineOptions = useMemo(() => {
-        if (!data || !data[selectedStation]) return [];
+        if (!failsData || !failsData[selectedStation]) return [];
         const linesSet = new Set<string>();
-        Object.values(data[selectedStation]).forEach((testRecords) => {
+        Object.values(failsData[selectedStation]).forEach((testRecords) => {
             testRecords.forEach((record) => {
                 linesSet.add(record.line);
             });
         });
         return Array.from(linesSet);
-    }, [data, selectedStation]);
+    }, [failsData, selectedStation]);
 
     const sortedDataArray = useMemo(() => {
-        if (!data || !data[selectedStation]) return [];
-        return Object.entries(data[selectedStation])
+        if (!failsData || !failsData[selectedStation]) return [];
+        return Object.entries(failsData[selectedStation])
             .map(([testName, records]) => {
                 const filteredRecords =
                     selectedLine === "all"
@@ -136,7 +121,7 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
             })
             .filter((test) => test.fails > 0)
             .sort((a, b) => b.fails - a.fails);
-    }, [data, selectedStation, selectedLine]);
+    }, [failsData, selectedStation, selectedLine]);
 
     const { totalFails, mostCriticalTest, maxFails } = useMemo(() => {
         const totalFailsLocal = sortedDataArray.reduce((sum, test) => sum + test.fails, 0);
@@ -158,14 +143,13 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
         return "#22c55e";                    // Perfect (0 fails)
     }
 
-
     const filteredRecordsForSelectedTest = useMemo(() => {
-        if (!selectedTest || !data || !data[selectedStation]) return [];
-        const allRecords = data[selectedStation][selectedTest] || [];
+        if (!selectedTest || !failsData || !failsData[selectedStation]) return [];
+        const allRecords = failsData[selectedStation][selectedTest] || [];
         return selectedLine === "all"
             ? allRecords
             : allRecords.filter((r) => r.line === selectedLine);
-    }, [selectedTest, data, selectedStation, selectedLine]);
+    }, [selectedTest, failsData, selectedStation, selectedLine]);
 
     // Column definitions
     const testRecordColumns = React.useMemo<RT.ColumnDef<TestRecord>[]>(
@@ -280,6 +264,9 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
     const heightPerTest = 20;
     const totalHeight = baseHeight + sortedDataArray.length * heightPerTest;
 
+    // Check if we have any data at all
+    const hasData = Object.keys(failsData || {}).length > 0;
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -291,64 +278,74 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
                     <CardTitle>Failed Tests by Station</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div>
-                            <Label htmlFor="station-select">Station</Label>
-                            <Select onValueChange={handleStationChange} value={selectedStation}>
-                                <SelectTrigger id="station-select">
-                                    <SelectValue placeholder="Select a station" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Object.keys(data).map((station) => (
-                                        <SelectItem key={station} value={station}>
-                                            {station}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                    {!hasData ? (
+                        <div className="flex items-center justify-center text-center h-[200px] text-muted-foreground">
+                            No failure data available. All systems operating normally.
                         </div>
-
-                        <div>
-                            <Label htmlFor="line-select">Line</Label>
-                            <Select onValueChange={handleLineChange} value={selectedLine}>
-                                <SelectTrigger id="line-select">
-                                    <SelectValue placeholder="All Lines" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Lines</SelectItem>
-                                    {lineOptions.map((line) => (
-                                        <SelectItem key={line} value={line}>
-                                            {line}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="text-sm space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="font-medium">Total Failures:</span>
-                                <span>{totalFails || "No data"}</span>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div>
+                                <Label htmlFor="station-select">Station</Label>
+                                <Select
+                                    onValueChange={handleStationChange}
+                                    value={selectedStation}
+                                    disabled={!hasData}
+                                >
+                                    <SelectTrigger id="station-select">
+                                        <SelectValue placeholder={hasData ? "Select a station" : "No stations available"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.keys(failsData || {}).map((station) => (
+                                            <SelectItem key={station} value={station}>
+                                                {station}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <span className="font-medium flex items-center">
-                                    <AlertTriangle className="h-4 w-4 text-destructive mr-2" />
-                                    Most Critical:
-                                </span>
-                                <span>
-                                    {mostCriticalTest
-                                        ? `${mostCriticalTest.name} (${mostCriticalTest.fails} fails)`
-                                        : "No data"}
-                                </span>
+
+                            <div>
+                                <Label htmlFor="line-select">Line</Label>
+                                <Select onValueChange={handleLineChange} value={selectedLine}>
+                                    <SelectTrigger id="line-select">
+                                        <SelectValue placeholder="All Lines" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Lines</SelectItem>
+                                        {lineOptions.map((line) => (
+                                            <SelectItem key={line} value={line}>
+                                                {line}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="text-sm space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium">Total Failures:</span>
+                                    <span>{totalFails || "No data"}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium flex items-center">
+                                        <AlertTriangle className="h-4 w-4 text-destructive mr-2" />
+                                        Most Critical:
+                                    </span>
+                                    <span>
+                                        {mostCriticalTest
+                                            ? `${mostCriticalTest.name} (${mostCriticalTest.fails} fails)`
+                                            : "No data"}
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
-                    {sortedDataArray.length === 0 ? (
+                    {hasData && sortedDataArray.length === 0 ? (
                         <div className="flex items-center justify-center text-center mt-4 text-muted-foreground h-[200px]">
                             No data available for this station/line.
                         </div>
-                    ) : (
+                    ) : hasData && (
                         <ResponsiveContainer width="100%" height={totalHeight}>
                             <BarChart
                                 data={sortedDataArray}
@@ -373,7 +370,7 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
                         </ResponsiveContainer>
                     )}
 
-                    {!selectedTest && sortedDataArray.length > 0 && (
+                    {hasData && !selectedTest && sortedDataArray.length > 0 && (
                         <div className="text-center mt-4 text-muted-foreground">
                             Click on any test fail bar to see detailed data.
                         </div>
@@ -479,4 +476,3 @@ export default function FailedTestsGraph({ initialData }: { initialData: FailsDa
         </motion.div>
     );
 }
-

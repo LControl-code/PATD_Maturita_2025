@@ -1,42 +1,42 @@
-// components/FailedTestsGraphOld/FailedTestsGraphOld.server.tsx
-
-import FailedTestsGraphClient from './FailedTestsGraph.client';
+import { useBuildSafeData } from '@/lib/buildSafeData';
+import { FailedTestsGraphClient } from './FailedTestsGraph.client';
+import type { FailsData } from './types';
 
 /**
  * Fetches data about failed tests from the API endpoint.
- * 
- * @async
- * @function fetchFailedTestsData
- * @returns {Promise<any>} A promise that resolves to the failed tests data
- * @throws {Error} When the API request fails
+ *
+ * @returns Promise resolving to the failed tests data
  */
-export async function fetchFailedTestsData(): Promise<any> {
-    const res = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL}/api/data/dashboard/failedTestsGraph`,
-        {
-            next: {
-                tags: ['failed_tests_tag'],
-            }
+async function fetchFailedTestsData(): Promise<FailsData> {
+    try {
+        const res = await fetch(
+            `${process.env.NEXT_PUBLIC_APP_URL}/api/data/dashboard/failedTestsGraph`,
+            {
+                next: {
+                    tags: ['failed_tests_tag'],
+                },
+                cache: 'no-store',
+            },
+        );
+
+        if (!res.ok) {
+            throw new Error(`API responded with status ${res.status}`);
         }
-    );
 
-    if (!res.ok) {
-        throw new Error(`Failed to fetch /api/failedTestsGraphNew (status: ${res.status}).`);
+        return res.json();
+    } catch (error) {
+        console.error('Failed to fetch failed tests data:', error);
+        throw error;
     }
-
-    return res.json();
-
 }
 
 /**
- * A server component that fetches and renders a graph displaying failed tests data.
- * This component fetches the initial data and passes it to the client-side component.
- * 
- * @returns {Promise<JSX.Element>} A Promise that resolves to the FailedTestsGraphClient component
- * with the fetched initial data.
+ * Server component that fetches and renders the failed tests graph.
+ * Handles data fetching and error states before passing data to the client component.
+ *
+ * During build, returns empty data to prevent API fetch failures.
  */
 export default async function FailedTestsGraph() {
-    if (process.env.NEXT_PHASE === "phase-production-build") return [];
-    const data = await fetchFailedTestsData();
-    return <FailedTestsGraphClient initialData={data} />;
+    const data = await useBuildSafeData(fetchFailedTestsData, {});
+    return <FailedTestsGraphClient data={data} />;
 }

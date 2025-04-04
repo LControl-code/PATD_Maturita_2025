@@ -1,13 +1,6 @@
-export type FailedTestData = {
-    // Define your data structure
-    station: string;
-    // ... other fields
-}
-
-export type FailedTestsGraphProps = {
-    initialData: FailedTestData[];
-}
-
+/**
+ * Represents a single test failure record
+ */
 export interface TestRecord {
     deviceCode: string;
     deviceType: string;
@@ -19,9 +12,18 @@ export interface TestRecord {
     time: string;
 }
 
+/**
+ * Nested structure of fails data organized by station and test name
+ */
 export interface FailsData {
     [stationName: string]: {
         [testName: string]: TestRecord[];
     };
 }
 
+/**
+ * Props for the FailedTestsGraph component
+ */
+export interface FailedTestsGraphProps {
+    data: FailsData;
+}

@@ -1,8 +1,6 @@
-// components/FailedTestsGraphOld/index.ts
 /**
- * Re-exports the FailedTestsGraph server component as the default export.
- * This file serves as a barrel export for the FailedTestsGraph component.
- * 
- * @module FailedTestsGraph
+ * Barrel file for the FailedTestsGraph component
+ * Re-exports the server component as the default export
  */
-export { default } from './FailedTestsGraph.server'
+export { default } from './FailedTestsGraph.server';
+export type { FailsData, TestRecord } from './types';
