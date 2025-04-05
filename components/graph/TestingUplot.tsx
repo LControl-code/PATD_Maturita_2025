@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import UplotReact from 'uplot-react';
 import 'uplot/dist/uPlot.min.css';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, HelpCircle, Info } from 'lucide-react';
 import {
   startOfDay,
   endOfDay,
@@ -24,6 +25,7 @@ import {
 import pb from '@/lib/pocketbase';
 import { DateRange } from 'react-day-picker';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Types for the new database schema
 interface Station {
@@ -79,6 +81,9 @@ const EXCLUDED_FIELDS = [
 ];
 
 export function TestingUplot() {
+  // Router for navigation
+  const router = useRouter();
+
   // Chart dimensions
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(800);
@@ -125,14 +130,19 @@ export function TestingUplot() {
     [key: string]: TestDataRecord[];
   }>({});
 
-  // Date range presets
-  const presetOptions = [
-    { label: 'Today', range: { from: new Date(), to: new Date() } },
-    { label: 'Yesterday', range: { from: subDays(new Date(), 1), to: subDays(new Date(), 1) } },
-    { label: 'Last 7 Days', range: { from: subDays(new Date(), 7), to: new Date() } },
-    { label: 'Last 30 Days', range: { from: subDays(new Date(), 30), to: new Date() } },
-    { label: 'Last 3 Months', range: { from: subMonths(new Date(), 3), to: new Date() } },
-  ];
+  // Format timestamp for tooltip display
+  const formatTimestamp = (unixTimestamp: number): string => {
+    const date = new Date(unixTimestamp * 1000);
+    return date.toLocaleString();
+  };
+
+  // Handle chart point click to navigate to device details
+  const handlePointClick = (deviceCode: string) => {
+    if (deviceCode) {
+      const encodedDeviceCode = encodeURIComponent(deviceCode);
+      router.push(`/device?deviceCode=${encodedDeviceCode}`);
+    }
+  };
 
   // Set chart width based on container size
   useLayoutEffect(() => {
@@ -241,15 +251,15 @@ export function TestingUplot() {
       try {
         // Get a sample record to find available tests
         const record = await pb
-          .collection('test_data')
-          .getFirstListItem<TestDataRecord>(
-            `station = "${selectedStation}" && device_type = "${selectedDeviceType}"`,
-            { sort: '-time' },
-          );
+            .collection('test_data')
+            .getFirstListItem<TestDataRecord>(
+                `station = "${selectedStation}" && device_type = "${selectedDeviceType}"`,
+                { sort: '-time' },
+            );
 
         if (record && record.test_data) {
           const tests = Object.keys(record.test_data).filter(
-            (key) => !EXCLUDED_FIELDS.includes(key),
+              (key) => !EXCLUDED_FIELDS.includes(key),
           );
 
           setAvailableTests(tests);
@@ -294,7 +304,7 @@ export function TestingUplot() {
         } else {
           // No matching limits found, set defaults
           console.log(
-            `No limits found for station=${selectedStation} and device_type=${selectedDeviceType}`,
+              `No limits found for station=${selectedStation} and device_type=${selectedDeviceType}`,
           );
           setLimits({});
         }
@@ -339,11 +349,11 @@ export function TestingUplot() {
   useEffect(() => {
     const fetchData = async () => {
       if (
-        !selectedStation ||
-        !selectedDeviceType ||
-        !selectedTest ||
-        !dateRange?.from ||
-        !dateRange?.to
+          !selectedStation ||
+          !selectedDeviceType ||
+          !selectedTest ||
+          !dateRange?.from ||
+          !dateRange?.to
       ) {
         return;
       }
@@ -392,8 +402,8 @@ export function TestingUplot() {
 
   // Extract test data from records
   const extractTestData = (
-    records: TestDataRecord[],
-    test: string,
+      records: TestDataRecord[],
+      test: string,
   ): [number[], number[], string[]] => {
     const timestamps: number[] = [];
     const values: number[] = [];
@@ -414,9 +424,9 @@ export function TestingUplot() {
   const options = useMemo(() => {
     // Find the selected station and device type names for title
     const stationName =
-      stations[selectedLine]?.find((s) => s.id === selectedStation)?.name || 'Unknown Station';
+        stations[selectedLine]?.find((s) => s.id === selectedStation)?.name || 'Unknown Station';
     const deviceTypeName =
-      deviceTypes.find((dt) => dt.id === selectedDeviceType)?.name || 'Unknown Type';
+        deviceTypes.find((dt) => dt.id === selectedDeviceType)?.name || 'Unknown Type';
 
     return {
       title: `${stationName} - ${deviceTypeName} - ${selectedTest}`,
@@ -472,11 +482,11 @@ export function TestingUplot() {
         {
           scale: 'x',
           values: (self: any, ticks: number[]) =>
-            ticks.map((v) => {
-              const index = Math.floor(v);
-              const timestamp = data[0][index];
-              return timestamp ? new Date(timestamp * 1000).toLocaleDateString() : '';
-            }),
+              ticks.map((v) => {
+                const index = Math.floor(v);
+                const timestamp = data[0][index];
+                return timestamp ? new Date(timestamp * 1000).toLocaleDateString() : '';
+              }),
           space: 80,
           grid: { show: true, stroke: '#e0e0e0', width: 1, dash: [5, 5] },
           ticks: { show: true, size: 10, stroke: '#000', width: 1 },
@@ -506,10 +516,13 @@ export function TestingUplot() {
         },
         dataIdx: (self: any, seriesIdx: number, closestIdx: number) => {
           if (seriesIdx === 1) {
-            // When hovering over a point, show device code in tooltip
+            // When hovering over a point, show time and device code in tooltip
             const deviceCode = deviceCodes[closestIdx];
-            if (deviceCode) {
-              self.over.title = `Device: ${deviceCode}`;
+            const timestamp = data[0][closestIdx];
+
+            if (deviceCode && timestamp) {
+              // Format the tooltip to show both time and device code
+              self.over.title = `Time: ${formatTimestamp(timestamp)}\nDevice: ${deviceCode}\n(Click for details)`;
             }
           }
           return closestIdx;
@@ -519,11 +532,20 @@ export function TestingUplot() {
         setCursor: [
           (self: any) => {
             const idx = self.cursor.idx;
-            if (idx !== null && deviceCodes[idx]) {
-              self.over.title = `Device: ${deviceCodes[idx]}`;
+            if (idx !== null && deviceCodes[idx] && data[0][idx]) {
+              self.over.title = `Time: ${formatTimestamp(data[0][idx])}\nDevice: ${deviceCodes[idx]}\n(Click for details)`;
             }
           },
         ],
+        // Add click handling for point navigation
+        setSelect: [
+          (self: any) => {
+            const idx = self.cursor.idx;
+            if (idx !== null && deviceCodes[idx]) {
+              handlePointClick(deviceCodes[idx]);
+            }
+          }
+        ]
       },
     };
   }, [
@@ -538,183 +560,226 @@ export function TestingUplot() {
     stations,
     deviceTypes,
     deviceCodes,
+    router,
   ]);
 
   return (
-    <Card className="w-full rounded">
-      <CardHeader className="flex flex-col gap-4 border-b">
-        <div className="flex flex-row justify-between items-center">
-          <div className="flex flex-col gap-1">
-            <CardTitle>SPC Chart</CardTitle>
-            <CardDescription>
-              {dateRange?.from && dateRange?.to
-                ? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
-                : 'Select a date range'}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2 sm:gap-4">
-            {/* Line Selection */}
-            <Select
-              value={selectedLine}
-              onValueChange={(line) => {
-                setSelectedLine(line);
-                setError(null);
-              }}
-            >
-              <SelectTrigger className="w-24 sm:w-32">
-                <SelectValue placeholder="Line" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Lines</SelectItem>
-                {lines.map((line) => (
-                  <SelectItem key={line.id} value={line.id}>
-                    {line.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Station Selection */}
-            <Select
-              value={selectedStation}
-              onValueChange={(station) => {
-                setSelectedStation(station);
-                setError(null);
-              }}
-              disabled={!selectedLine || !stations[selectedLine]?.length}
-            >
-              <SelectTrigger className="w-24 sm:w-32">
-                <SelectValue placeholder="Station" />
-              </SelectTrigger>
-              <SelectContent>
-                {selectedLine &&
-                  stations[selectedLine]?.map((station) => (
-                    <SelectItem key={station.id} value={station.id}>
-                      {station.name}
-                    </SelectItem>
+      <Card className="w-full rounded [&_.u-cursor-pt]:cursor-pointer">
+        <CardHeader className="flex flex-col gap-4 border-b">
+          <div className="flex flex-row justify-between items-center">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <CardTitle>SPC Chart</CardTitle>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Click on data points to view device details</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <CardDescription>
+                {dateRange?.from && dateRange?.to
+                    ? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
+                    : 'Select a date range'}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:gap-4">
+              {/* Line Selection */}
+              <Select
+                  value={selectedLine}
+                  onValueChange={(line) => {
+                    setSelectedLine(line);
+                    setError(null);
+                  }}
+              >
+                <SelectTrigger className="w-24 sm:w-32">
+                  <SelectValue placeholder="Line" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Lines</SelectItem>
+                  {lines.map((line) => (
+                      <SelectItem key={line.id} value={line.id}>
+                        {line.name}
+                      </SelectItem>
                   ))}
-              </SelectContent>
-            </Select>
+                </SelectContent>
+              </Select>
 
-            {/* Device Type Selection */}
-            <Select
-              value={selectedDeviceType}
-              onValueChange={(type) => {
-                setSelectedDeviceType(type);
-                setError(null);
-              }}
-            >
-              <SelectTrigger className="w-24 sm:w-32">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                {deviceTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {/* Station Selection */}
+              <Select
+                  value={selectedStation}
+                  onValueChange={(station) => {
+                    setSelectedStation(station);
+                    setError(null);
+                  }}
+                  disabled={!selectedLine || !stations[selectedLine]?.length}
+              >
+                <SelectTrigger className="w-24 sm:w-32">
+                  <SelectValue placeholder="Station" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedLine &&
+                      stations[selectedLine]?.map((station) => (
+                          <SelectItem key={station.id} value={station.id}>
+                            {station.name}
+                          </SelectItem>
+                      ))}
+                </SelectContent>
+              </Select>
 
-            {/* Test Selection */}
-            <Select
-              value={selectedTest}
-              onValueChange={(test) => {
-                setSelectedTest(test);
-                setError(null);
-              }}
-              disabled={availableTests.length === 0 || isTestsLoading}
-            >
-              <SelectTrigger className="w-32 sm:w-40">
-                <SelectValue placeholder="Select test" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTests.map((test) => (
-                  <SelectItem key={test} value={test}>
-                    {test}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {/* Device Type Selection */}
+              <Select
+                  value={selectedDeviceType}
+                  onValueChange={(type) => {
+                    setSelectedDeviceType(type);
+                    setError(null);
+                  }}
+              >
+                <SelectTrigger className="w-24 sm:w-32">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {deviceTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            {/* Date Range Selection */}
-            <Select
-              defaultValue="today"
-              onValueChange={(value) => {
-                const today = new Date();
+              {/* Test Selection */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <Select
+                          value={selectedTest}
+                          onValueChange={(test) => {
+                            setSelectedTest(test);
+                            setError(null);
+                          }}
+                          disabled={availableTests.length === 0 || isTestsLoading}
+                      >
+                        <SelectTrigger className="w-32 sm:w-40">
+                          <SelectValue placeholder="Select test" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTests.map((test) => (
+                              <SelectItem key={test} value={test}>
+                                {test}
+                              </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Select a test parameter to display on the chart</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
 
-                switch (value) {
-                  case 'today':
-                    setDateRange({
-                      from: startOfDay(today),
-                      to: endOfDay(today),
-                    });
-                    break;
-                  case 'this-week':
-                    setDateRange({
-                      from: startOfWeek(today, { weekStartsOn: 1 }),
-                      to: today,
-                    });
-                    break;
-                  case 'last-week':
-                    const lastWeekStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
-                    const lastWeekEnd = endOfWeek(lastWeekStart, { weekStartsOn: 1 });
-                    setDateRange({
-                      from: lastWeekStart,
-                      to: lastWeekEnd,
-                    });
-                    break;
-                  case 'last-2-weeks':
-                    setDateRange({
-                      from: startOfWeek(subWeeks(today, 2), { weekStartsOn: 1 }),
-                      to: today,
-                    });
-                    break;
-                  case 'last-month':
-                    setDateRange({
-                      from: subMonths(today, 1),
-                      to: today,
-                    });
-                    break;
-                }
-              }}
-            >
-              <SelectTrigger className="w-32 sm:w-40">
-                <SelectValue placeholder="Date range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="this-week">This week</SelectItem>
-                <SelectItem value="last-week">Last week</SelectItem>
-                <SelectItem value="last-2-weeks">Last 2 weeks</SelectItem>
-                <SelectItem value="last-month">Last month</SelectItem>
-              </SelectContent>
-            </Select>
+              {/* Date Range Selection */}
+              <Select
+                  defaultValue="today"
+                  onValueChange={(value) => {
+                    const today = new Date();
+
+                    switch (value) {
+                      case 'today':
+                        setDateRange({
+                          from: startOfDay(today),
+                          to: endOfDay(today),
+                        });
+                        break;
+                      case 'this-week':
+                        setDateRange({
+                          from: startOfWeek(today, { weekStartsOn: 1 }),
+                          to: today,
+                        });
+                        break;
+                      case 'last-week':
+                        const lastWeekStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
+                        const lastWeekEnd = endOfWeek(lastWeekStart, { weekStartsOn: 1 });
+                        setDateRange({
+                          from: lastWeekStart,
+                          to: lastWeekEnd,
+                        });
+                        break;
+                      case 'last-2-weeks':
+                        setDateRange({
+                          from: startOfWeek(subWeeks(today, 2), { weekStartsOn: 1 }),
+                          to: today,
+                        });
+                        break;
+                      case 'last-month':
+                        setDateRange({
+                          from: subMonths(today, 1),
+                          to: today,
+                        });
+                        break;
+                    }
+                  }}
+              >
+                <SelectTrigger className="w-32 sm:w-40">
+                  <SelectValue placeholder="Date range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this-week">This week</SelectItem>
+                  <SelectItem value="last-week">Last week</SelectItem>
+                  <SelectItem value="last-2-weeks">Last 2 weeks</SelectItem>
+                  <SelectItem value="last-month">Last month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="w-full my-4 grow" ref={chartContainerRef}>
-        {isLoading ? (
-          <div className="flex justify-center items-center h-96">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-          </div>
-        ) : error ? (
-          <Alert variant="destructive" className="my-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : (
-          <UplotReact
-            options={options}
-            data={[
-              indices, // Use indices for x-axis
-              data[1], // Values
-              Array(indices.length).fill(upperLimit), // Upper limit line
-              Array(indices.length).fill(lowerLimit), // Lower limit line
-            ]}
-          />
-        )}
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="w-full my-4 grow" ref={chartContainerRef}>
+          {isLoading ? (
+              <div className="flex justify-center items-center h-96">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+              </div>
+          ) : error ? (
+              <Alert variant="destructive" className="my-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+          ) : (
+              <>
+                <UplotReact
+                    options={options}
+                    data={[
+                      indices, // Use indices for x-axis
+                      data[1], // Values
+                      Array(indices.length).fill(upperLimit), // Upper limit line
+                      Array(indices.length).fill(lowerLimit), // Lower limit line
+                    ]}
+                />
+                {data[1].length > 0 && (
+                    <TooltipProvider>
+                      <div className="flex items-center justify-center gap-2 mt-3">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground cursor-help">
+                              <Info className="h-3 w-3" />
+                              <span>Hovering shows details, clicking navigates to device page</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs">
+                            <p>Hover over points to see time and device code. Click to analyze the specific device in detail.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TooltipProvider>
+                )}
+              </>
+          )}
+        </CardContent>
+      </Card>
   );
 }

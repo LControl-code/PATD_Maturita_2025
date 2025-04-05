@@ -1,23 +1,36 @@
-import { Suspense } from 'react';
+// components/dashboard/DashboardOverview/DashboardOverview.server.tsx
+
 import { DashboardOverviewClient } from './DashboardOverview.client';
 import type { DashboardStats } from './types';
 import { useBuildSafeData } from '@/lib/buildSafeData';
+import pb from '@/lib/pocketbase';
 
 /**
- * Fetches dashboard statistics data
- * Currently returns mock data but would integrate with Pocketbase in production
+ * Fetches dashboard statistics from the PocketBase API
  */
 async function getDashboardStats(): Promise<DashboardStats> {
-  // Mock data for development
-  // Replace this with actual data fetching in production
-  // e.g. return await getStatsRecord();
+  try {
+    // Fetch real data from PocketBase endpoint
+    const data = await pb.send('/api/dashboard-stats', {
+      method: 'GET',
+    });
 
-  return {
-    totalTested: 12584,
-    activeStations: 8,
-    todaysProduction: 45.8,
-    overallEfficiency: 78.5,
-  };
+    return {
+      totalTested: data.totalTested || 0,
+      activeStations: data.activeStations || 0,
+      todaysProduction: data.todaysProduction || 0,
+      overallEfficiency: data.overallEfficiency || 0,
+    };
+  } catch (error) {
+    console.error('Failed to fetch dashboard stats:', error);
+    // Return fallback values on error
+    return {
+      totalTested: 0,
+      activeStations: 0,
+      todaysProduction: 0,
+      overallEfficiency: 0,
+    };
+  }
 }
 
 /**
@@ -30,5 +43,6 @@ export default async function DashboardOverview() {
     todaysProduction: 0,
     overallEfficiency: 0,
   });
+
   return <DashboardOverviewClient data={data} />;
 }
