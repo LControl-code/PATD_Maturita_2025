@@ -86,8 +86,8 @@ Data flow is optimized using:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/industrial-test-data-analyzer.git
-cd industrial-test-data-analyzer
+git clone https://github.com/LControl-code/PATD_Maturita_2025.git
+cd PATD_Maturita_2025
 
 # Install dependencies
 npm install
