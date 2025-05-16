@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react';
 import { TestDataClient } from './TestData.client';
-import pb from '@/lib/pocketbase';
+import { pb } from '@/lib/pocketbase';
 import { TestDataExpanded } from '@/types/testsData';
 import { notFound } from 'next/navigation';
 

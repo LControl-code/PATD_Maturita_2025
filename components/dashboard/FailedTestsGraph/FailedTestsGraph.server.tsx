@@ -10,7 +10,7 @@ import type { FailsData } from './types';
 async function fetchFailedTestsData(): Promise<FailsData> {
     try {
         const res = await fetch(
-            `${process.env.NEXT_PUBLIC_APP_URL}/api/data/dashboard/failedTestsGraph`,
+            `${process.env.APP_URL}/api/data/dashboard/failedTestsGraph`,
             {
                 next: {
                     tags: ['failed_tests_tag'],

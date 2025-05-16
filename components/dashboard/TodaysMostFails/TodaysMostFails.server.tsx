@@ -2,7 +2,7 @@
 
 import TodaysMostFailsClient from './TodaysMostFails.client'
 import { FailsData } from './types'
-import {useBuildSafeData} from "@/lib/buildSafeData";
+import { useBuildSafeData } from "@/lib/buildSafeData";
 
 /**
  * Fetches today's most failed items data from the API.
@@ -12,7 +12,7 @@ import {useBuildSafeData} from "@/lib/buildSafeData";
  * @throws {Error} If the fetch request fails or returns a non-OK status
  */
 export async function fetchTodaysMostFailsData(): Promise<FailsData> {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/data/dashboard/todaysMostFails`, {
+    const res = await fetch(`${process.env.APP_URL}/api/data/dashboard/todaysMostFails`, {
         next: {
             tags: ['top_fails_tag'],
 

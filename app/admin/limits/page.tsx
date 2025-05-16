@@ -1,9 +1,14 @@
 import { LimitsEditor } from '@/components/admin/limits/LimitsEditor.client';
+import { useBuildSafeData } from '@/lib/buildSafeData';
 import { fetchLimitsWithRelations } from '@/lib/data/limits';
 
 export default async function LimitsPage() {
   // Server-side data fetching
-  const { limits, deviceTypes, stations } = await fetchLimitsWithRelations();
+  const { limits, deviceTypes, stations } = await useBuildSafeData(fetchLimitsWithRelations, {
+    limits: [],
+    deviceTypes: [],
+    stations: []
+  });
 
   return (
     <div className="container py-8 mx-auto max-w-7xl">

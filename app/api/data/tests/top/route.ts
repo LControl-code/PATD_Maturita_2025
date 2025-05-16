@@ -1,7 +1,7 @@
 // Root: /frontend/app/api/data/tests/top/route.ts
 import { NextResponse } from 'next/server'
 import { getTopFailsData } from '@/lib/pocketbase_connect';
-import { issueCountData } from '@/mock/issueCountData';
+// import { issueCountData } from '@/mock/issueCountData';
 import { TopFailsResponse } from '@/types/testData';
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     const data = await getTopFailsData();
     const mergedData: TopFailsResponse = {
       ...data,
-      ...issueCountData
+      // ...issueCountData
     };
 
     return NextResponse.json(mergedData);

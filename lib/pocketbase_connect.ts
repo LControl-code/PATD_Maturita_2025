@@ -9,7 +9,8 @@ import {
   LiveErrorsResponse
 } from "@/types/pocketbase-types";
 
-import pb from "@/lib/pocketbase";
+import { pb } from "@/lib/pocketbase";
+
 
 // -------------------------------------------------------
 // Initialize PocketBase client

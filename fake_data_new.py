@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from pocketbase import PocketBase
 
 # Load environment variables from .env
-load_dotenv()
+load_dotenv(dotenv_path=".env.python")
 
 POCKETBASE_URL = os.environ.get("POCKETBASE_URL")
 ADMIN_EMAIL = os.environ.get("PB_ADMIN_EMAIL")

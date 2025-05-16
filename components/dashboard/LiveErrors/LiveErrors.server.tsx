@@ -10,7 +10,7 @@ import { ErrorData } from '@/types/errors'
  * @throws {Error} When the fetch request fails with a non-200 status code
  */
 export async function fetchLiveErrorsData(): Promise<ErrorData[]> {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/data/dashboard/liveErrors`, {
+  const res = await fetch(`${process.env.APP_URL}/api/data/dashboard/liveErrors`, {
     next: {
       tags: ['live_errors_tag'],
     }

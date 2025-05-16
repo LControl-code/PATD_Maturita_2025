@@ -3,7 +3,7 @@
 import { useBuildSafeData } from '@/lib/buildSafeData';
 import { ProductionStatusClient } from './ProductionStatus.client';
 import type { ProductionStatusData } from './types';
-import pb from '@/lib/pocketbase';
+import { pb } from '@/lib/pocketbase';
 
 async function getProductionData(): Promise<ProductionStatusData> {
   try {

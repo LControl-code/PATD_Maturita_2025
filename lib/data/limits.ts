@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase'
+import { pb } from '@/lib/pocketbase'
 
 export async function fetchLimitsWithRelations() {
   try {

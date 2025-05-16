@@ -3,7 +3,7 @@
 import { DashboardOverviewClient } from './DashboardOverview.client';
 import type { DashboardStats } from './types';
 import { useBuildSafeData } from '@/lib/buildSafeData';
-import pb from '@/lib/pocketbase';
+import { pb } from '@/lib/pocketbase';
 
 /**
  * Fetches dashboard statistics from the PocketBase API

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import pb from './pocketbase';
+import { pb } from './pocketbase';
 import { revalidateTag } from 'next/cache';
 
 export enum DBEventType {

@@ -13,6 +13,8 @@ if (!globalThis.EventSource) {
  * @constant
  * @type {PocketBase}
  */
-const pb = new PocketBase(process.env.POCKETBASE_URL || 'http://127.0.0.1:8090');
+const pb = new PocketBase(process.env.POCKETBASE_URL);
+const pb_public = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL);
 pb.autoCancellation(false);
-export default pb;
+pb_public.autoCancellation(false);
+export { pb, pb_public };
